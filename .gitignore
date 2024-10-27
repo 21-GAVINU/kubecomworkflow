@@ -1,21 +1,12 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-env/
+# Ignore virtual environment folder
 venv/
 .env
+*.env
 
-# Environment Variables
-.env
+# Ignore secret files
+secrets/
 
-# IDEs and Editors
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# OS Files
-.DS_Store
-Thumbs.db
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
