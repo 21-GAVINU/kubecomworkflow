@@ -5,8 +5,8 @@ class KubernetesCommandGenerator:
     """Class to generate Kubernetes commands based on parsed intents."""
 
     @staticmethod
-    def generate_command(intent: str) -> str:
-        """Generate a concise Kubernetes command using an external API."""
+    def generate_multi_command(intent: str) -> str:
+        """Generate a sequence of Kubernetes commands for multi-step tasks."""
         if not API_KEY or not API_URL:
             raise ValueError("API key or URL not configured")
 
@@ -19,8 +19,9 @@ class KubernetesCommandGenerator:
                 {
                     "parts": [
                         {
-                            "text": f"Generate a Kubernetes command for: {intent}. "
-                                    "Only provide the command itself, without any explanations or additional information."
+                            "text": f"Generate a sequence of Kubernetes commands for: {intent}. "
+                                    "The commands should follow the proper order. For example, create a namespace if needed, "
+                                    "then create a deployment, and so on. Only provide the commands without any explanations."
                         }
                     ]
                 }
@@ -32,8 +33,8 @@ class KubernetesCommandGenerator:
 
         # Check if the request was successful
         if response.status_code == 200:
-            # Extract the command
-            command_content = response.json()['candidates'][0]['content']['parts'][0]['text']
-            return command_content.strip()  # Return only the command
+            # Extract the commands
+            commands_content = response.json()['candidates'][0]['content']['parts'][0]['text']
+            return commands_content.strip()  # Return only the commands
         else:
             raise Exception(f"Request failed with status code {response.status_code}: {response.text}")
