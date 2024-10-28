@@ -6,7 +6,7 @@ class KubernetesCommandGenerator:
 
     @staticmethod
     def generate_command(intent: str) -> str:
-        """Generate a Kubernetes command using an external API."""
+        """Generate a concise Kubernetes command using an external API."""
         if not API_KEY or not API_URL:
             raise ValueError("API key or URL not configured")
 
@@ -18,7 +18,10 @@ class KubernetesCommandGenerator:
             "contents": [
                 {
                     "parts": [
-                        {"text": f"Generate a Kubernetes command for: {intent}. Only provide the command without any explanations."}
+                        {
+                            "text": f"Generate a Kubernetes command for: {intent}. "
+                                    "Only provide the command itself, without any explanations or additional information."
+                        }
                     ]
                 }
             ]
