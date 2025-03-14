@@ -26,7 +26,7 @@ def process_slack_message(text):
       1. Generates a chain-of-thought (CoT) reasoning from the user's instruction.
       2. Uses the CoT to generate kubectl commands.
       3. Validates each command with OPA.
-      4. Executes the allowed commands and returns the output.
+      4. Executes the allowed commands and returns a beautified output including the CoT and commands.
       5. If execution fails, uses error feedback to refine the commands and re-executes them.
     """
     try:
@@ -51,11 +51,10 @@ def process_slack_message(text):
             if allowed:
                 allowed_commands.append(cmd)
             else:
-                # If the reason indicates a missing namespace, auto-correct the command
+                # Option: Auto-correct if missing namespace (example below)
                 if "no namespace provided" in reason.lower():
                     corrected_cmd = f"{cmd} --namespace=staging"  # Append default namespace
                     logging.info(f"Auto-correcting command: {cmd} -> {corrected_cmd}")
-                    # Re-check the corrected command with OPA
                     allowed_corrected, corr_reason = opa_check_command(corrected_cmd)
                     if allowed_corrected:
                         allowed_commands.append(corrected_cmd)
@@ -70,6 +69,14 @@ def process_slack_message(text):
                 msg += f"- {cmd}: {reason}\n"
             return msg
 
+        # Prepare a formatted message that shows the CoT and the commands
+        beautified_output = (
+            "💡 *Chain-of-Thought:*\n"
+            "```" + cot + "```\n\n"
+            "🔧 *Generated Kubernetes Commands:*\n"
+            "```" + "\n".join(allowed_commands) + "```\n\n"
+        )
+
         # Stage 4: Execute the allowed commands on the running cluster
         execution_output = execute_kubectl_commands(allowed_commands, delay=10)
         logging.info(f"Initial execution output: {execution_output}")
@@ -81,12 +88,16 @@ def process_slack_message(text):
             refined_commands = refine_commands_with_error(text, commands, error_message, model, tokenizer)
             logging.info(f"Refined Commands: {refined_commands}")
             if not refined_commands:
-                return "⚠️ Unable to refine commands after error."
+                return beautified_output + "⚠️ Unable to refine commands after error."
             refined_execution_output = execute_kubectl_commands(refined_commands, delay=10)
             logging.info(f"Refined execution output: {refined_execution_output}")
-            return f"✅ Refined Execution Results:\n{refined_execution_output}"
+            beautified_output += "✅ *Refined Execution Results:*\n"
+            beautified_output += "```" + refined_execution_output + "```"
+            return beautified_output
         else:
-            return f"✅ Execution Results:\n{execution_output}"
+            beautified_output += "✅ *Execution Results:*\n"
+            beautified_output += "```" + execution_output + "```"
+            return beautified_output
 
     except Exception as e:
         logging.error(f"Error processing message: {e}")
