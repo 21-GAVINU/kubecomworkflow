@@ -153,12 +153,8 @@ def refine_commands_with_error(intent: str, previous_commands: list, error_messa
     )
     raw_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
     logging.info(f"Refined commands output: {raw_output}")
-
-    # Extract lines that start with "kubectl"
-    refined_commands = [
-        line.strip()
-        for line in raw_output.split("\n")
-        if line.strip().startswith("kubectl")
-    ]
+    
+    # Extract lines starting with "kubectl"
+    refined_commands = [line.strip() for line in raw_output.split("\n") if line.strip().startswith("kubectl")]
     logging.info(f"Refined Commands: {refined_commands}")
     return refined_commands
