@@ -23,28 +23,25 @@ def extract_error_from_output(execution_output: str) -> str:
 def extract_steps_from_cot(cot: str) -> str:
     """
     Extracts only the bullet-pointed or numbered steps from the full chain-of-thought.
-    Also captures lines starting with 'Step X:' but skips lines that literally match 'Step X: <reasoning>'.
+    Also captures lines starting with 'Step X:' but skips lines that are generic placeholders,
+    e.g. 'Step 1: <reasoning>' or any 'Step X: <...>'.
     If no steps are found, returns the entire CoT.
     """
     lines = cot.splitlines()
     bullet_lines = []
     for line in lines:
         stripped = line.strip()
-        # Skip lines that are exactly: Step X: <reasoning> (case-insensitive for 'step')
-        # Example: "Step 1: <reasoning>"
-        # The regex checks if it matches that exact pattern, nothing else
-        if re.match(r"^step\s*\d+:\s*<reasoning>\s*$", stripped, re.IGNORECASE):
+        # Skip lines that match a generic placeholder like "Step 1: <anything>"
+        if re.match(r"^step\s*\d+:\s*<.*?>\s*$", stripped, re.IGNORECASE):
             continue
-
-        # If line starts with a dash or a digit + period, or "Step X:"
-        # treat it as a step
+        # If line starts with a dash, a digit+period, or "Step X:" treat it as a step
         if (stripped.startswith("-")
             or re.match(r"^\d+\.", stripped)
             or re.match(r"^step\s*\d+:", stripped, re.IGNORECASE)):
             bullet_lines.append(stripped)
     if bullet_lines:
         return "\n".join(bullet_lines)
-    # Fallback: return entire chain-of-thought if no bullet lines
+    # Fallback: return entire chain-of-thought if no bullet lines found
     return cot
 
 def process_slack_message(text):
