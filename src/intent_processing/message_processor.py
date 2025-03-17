@@ -1,4 +1,5 @@
 import logging
+import re
 from src.model.model_loader import load_model
 from src.commands.command_executor import execute_kubectl_commands
 from src.commands.command_generation import (
@@ -16,18 +17,44 @@ def extract_error_from_output(execution_output: str) -> str:
     Extracts error-related lines from the execution output.
     """
     lines = execution_output.split("\n")
-    # Look for any line that contains 'error:' (case-insensitive)
     error_lines = [line for line in lines if "error:" in line.lower()]
     return "\n".join(error_lines) if error_lines else "Unknown error"
 
+def extract_steps_from_cot(cot: str) -> str:
+    """
+    Extracts only the bullet-pointed or numbered steps from the full chain-of-thought.
+    Also captures lines starting with 'Step X:' but skips lines that literally match 'Step X: <reasoning>'.
+    If no steps are found, returns the entire CoT.
+    """
+    lines = cot.splitlines()
+    bullet_lines = []
+    for line in lines:
+        stripped = line.strip()
+        # Skip lines that are exactly: Step X: <reasoning> (case-insensitive for 'step')
+        # Example: "Step 1: <reasoning>"
+        # The regex checks if it matches that exact pattern, nothing else
+        if re.match(r"^step\s*\d+:\s*<reasoning>\s*$", stripped, re.IGNORECASE):
+            continue
+
+        # If line starts with a dash or a digit + period, or "Step X:"
+        # treat it as a step
+        if (stripped.startswith("-")
+            or re.match(r"^\d+\.", stripped)
+            or re.match(r"^step\s*\d+:", stripped, re.IGNORECASE)):
+            bullet_lines.append(stripped)
+    if bullet_lines:
+        return "\n".join(bullet_lines)
+    # Fallback: return entire chain-of-thought if no bullet lines
+    return cot
+
 def process_slack_message(text):
     """
-    Processes the Slack message:
-      1. Generates a chain-of-thought (CoT) reasoning from the user's instruction.
-      2. Uses the CoT to generate kubectl commands.
-      3. Validates each command with OPA.
-      4. Executes the allowed commands and returns the output.
-      5. If execution fails, uses error feedback to refine the commands and re-executes them.
+    Generator function that processes the Slack message in stages,
+    yielding live feedback:
+      - Stage 'cot': The Chain-of-Thought reasoning (only the 'steps').
+      - Stage 'commands': The validated (and auto-corrected) Kubernetes commands.
+      - Stage 'final': The final execution result.
+    If refinement occurs, it yields an additional 'refined' stage.
     """
     try:
         logging.info(f"Processing Message: {text}")
@@ -35,13 +62,19 @@ def process_slack_message(text):
         # Stage 1: Generate Chain-of-Thought (CoT)
         cot = generate_cot(text, model, tokenizer)
         logging.info(f"Chain-of-Thought generated: {cot}")
+        
+        # Extract only the "steps" portion from the CoT
+        steps_only = extract_steps_from_cot(cot)
+
+        # Yield the steps instead of the entire CoT
+        yield {"stage": "cot", "message": f"💡 *Chain-of-Thought:*\n```{steps_only}```"}
 
         # Stage 2: Generate commands based on the CoT
         commands = generate_commands_from_cot(cot, model, tokenizer)
         logging.info(f"Initial Commands extracted: {commands}")
-
         if not commands:
-            return "⚠️ No valid Kubernetes commands found."
+            yield {"stage": "final", "message": "⚠️ No valid Kubernetes commands found."}
+            return
 
         # Stage 3: Validate each command with OPA
         allowed_commands = []
@@ -51,11 +84,9 @@ def process_slack_message(text):
             if allowed:
                 allowed_commands.append(cmd)
             else:
-                # If the reason indicates a missing namespace, auto-correct the command
                 if "no namespace provided" in reason.lower():
-                    corrected_cmd = f"{cmd} --namespace=staging"  # Append default namespace
+                    corrected_cmd = f"{cmd} --namespace=staging"
                     logging.info(f"Auto-correcting command: {cmd} -> {corrected_cmd}")
-                    # Re-check the corrected command with OPA
                     allowed_corrected, corr_reason = opa_check_command(corrected_cmd)
                     if allowed_corrected:
                         allowed_commands.append(corrected_cmd)
@@ -63,31 +94,45 @@ def process_slack_message(text):
                         rejected_commands.append((cmd, reason))
                 else:
                     rejected_commands.append((cmd, reason))
-
+        
         if not allowed_commands:
             msg = "❌ Generated commands violate policy constraints:\n"
             for cmd, reason in rejected_commands:
                 msg += f"- {cmd}: {reason}\n"
-            return msg
+            yield {"stage": "final", "message": msg}
+            return
 
-        # Stage 4: Execute the allowed commands on the running cluster
-        execution_output = execute_kubectl_commands(allowed_commands, delay=10)
+        # Yield the validated commands
+        yield {"stage": "commands", "message": f"🔧 *Generated Kubernetes Commands:*\n```{chr(10).join(allowed_commands)}```"}
+
+        # Stage 4: Execute the allowed commands
+        execution_output = execute_kubectl_commands(allowed_commands, delay=5)
         logging.info(f"Initial execution output: {execution_output}")
 
-        # Stage 5: Check for errors and refine commands if necessary
-        if "error:" in execution_output.lower():
-            error_message = extract_error_from_output(execution_output)
-            logging.info(f"Detected error: {error_message}")
-            refined_commands = refine_commands_with_error(text, commands, error_message, model, tokenizer)
-            logging.info(f"Refined Commands: {refined_commands}")
-            if not refined_commands:
-                return "⚠️ Unable to refine commands after error."
-            refined_execution_output = execute_kubectl_commands(refined_commands, delay=10)
-            logging.info(f"Refined execution output: {refined_execution_output}")
-            return f"✅ Refined Execution Results:\n{refined_execution_output}"
-        else:
-            return f"✅ Execution Results:\n{execution_output}"
+        # If execution output does not contain error, yield final result
+        if "error:" not in execution_output.lower():
+            yield {"stage": "final", "message": f"✅ *Execution Results:*\n```{execution_output}```"}
+            return
 
+        # Stage 5: Handle errors and refine commands
+        error_message = extract_error_from_output(execution_output)
+        logging.info(f"Detected error: {error_message}")
+        # Yield the initial execution output with error
+        yield {"stage": "initial_error", "message": f"❌ *Initial Execution Results (with error):*\n```{execution_output}```"}
+        
+        refined_commands = refine_commands_with_error(text, commands, error_message, model, tokenizer)
+        logging.info(f"Refined Commands: {refined_commands}")
+        if not refined_commands:
+            yield {"stage": "final", "message": "⚠️ Unable to refine commands after error."}
+            return
+        
+        # Yield the refined commands
+        yield {"stage": "refined_commands", "message": f"🔧 *Refined Kubernetes Commands:*\n```{chr(10).join(refined_commands)}```"}
+        
+        refined_execution_output = execute_kubectl_commands(refined_commands, delay=10)
+        logging.info(f"Refined execution output: {refined_execution_output}")
+        yield {"stage": "final", "message": f"✅ *Refined Execution Results:*\n```{refined_execution_output}```"}
+    
     except Exception as e:
         logging.error(f"Error processing message: {e}")
-        return f"❌ Error processing request: {e}"
+        yield {"stage": "final", "message": f"❌ Error processing request: {e}"}

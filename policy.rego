@@ -10,7 +10,7 @@ deny contains msg if {
 
 # Deny commands missing a namespace specification
 deny contains msg if {
-    not regex.match("(?i).*--namespace=.*", input.command)
+    not ( regex.match("(?i).*--namespace=.*", input.command) 
+          or regex.match("(?i).*\\-n\\s+\\S+.*", input.command) )
     msg := "No namespace provided in command. Defaulting to staging is required."
 }
-    

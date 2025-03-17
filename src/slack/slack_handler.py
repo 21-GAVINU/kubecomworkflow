@@ -20,7 +20,6 @@ if not SIGNING_SECRET or not SLACK_BOT_TOKEN:
 slack_events_adapter = SlackEventAdapter(SIGNING_SECRET, "/slack/events", app)
 web_client = slack.WebClient(token=SLACK_BOT_TOKEN)
 
-# Simple endpoint to test that our Flask app is receiving POST requests
 @app.route("/test", methods=["POST"])
 def test_endpoint():
     data = request.get_json()
@@ -62,18 +61,14 @@ def handle_message_event(payload):
         logger.info("Sending processing acknowledgment to user")
         send_processing_message(channel_id, text)
 
-        # Now process the user intent
-        logger.info(f"🤖 Processing user intent: {text}")
-        response_text = process_slack_message(text)
-
-        # Send the final response back to Slack
-        web_client.chat_postMessage(channel=channel_id, text=response_text)
+        # Use the generator to get live updates from processing
+        for update in process_slack_message(text):
+            # Each update is a dict with keys 'stage' and 'message'
+            web_client.chat_postMessage(channel=channel_id, text=update["message"])
 
     except Exception as e:
         logger.error(f"⚠️ Error processing Slack event: {e}")
 
-# Define the start_slack_bot function for external calls
 def start_slack_bot():
     logger.info("🚀 Starting Slack bot on port 5000...")
-    # Use use_reloader=False to avoid duplicate initialization during development
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
