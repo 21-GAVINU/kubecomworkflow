@@ -10,8 +10,7 @@ deny contains msg if {
     msg := "Delete commands are not allowed in this cluster."
 }
 
-# Deny commands missing a namespace specification,
-# but exempt "kubectl create namespace" commands.
+# Deny commands missing a namespace specification,but exempt "kubectl create namespace" commands.
 deny contains msg if {
     not regex.match("(?i).*kubectl\\s+create\\s+namespace.*", input.command)
     not regex.match("(?i).*--namespace=.*", input.command)
@@ -19,7 +18,7 @@ deny contains msg if {
     msg := "No namespace provided in command. Defaulting to staging is required."
 }
 
-# Deny commands containing placeholder values (e.g., text inside angle brackets)
+# Deny commands containing placeholder values
 deny contains msg if {
     regex.match("(?i).*<[^>]+>.*", input.command)
     msg := "Command contains placeholder values. Please replace with actual resource names."

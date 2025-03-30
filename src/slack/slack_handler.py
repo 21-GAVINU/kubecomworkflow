@@ -3,12 +3,11 @@ import os
 from flask import Flask, request, jsonify
 from slackeventsapi import SlackEventAdapter
 import slack
-from src.config.config import SIGNING_SECRET, SLACK_BOT_TOKEN  # Import from config
+from src.config.config import SIGNING_SECRET, SLACK_BOT_TOKEN
 from src.intent_processing.message_processor import process_slack_message
-from src.config.logging_config import logger  # Central logging configuration
-from src.lifecycle.lifecycle import send_processing_message  # Import lifecycle function
+from src.config.logging_config import logger  
+from src.lifecycle.lifecycle import send_processing_message  
 
-# Initialize Flask app
 app = Flask(__name__)
 
 # Validate environment variables
@@ -48,7 +47,6 @@ def handle_message_event(payload):
 
         logger.info(f"📩 Received message from User: {user_id}, Channel: {channel_id}, Text: {text}")
 
-        # Check if the event has text and ignore bot messages
         if not text:
             logger.warning("⚠️ No text found in the event payload.")
             return
@@ -57,11 +55,9 @@ def handle_message_event(payload):
             logger.info("🤖 Ignoring bot message.")
             return
 
-        # Send a processing acknowledgment message using lifecycle function
         logger.info("Sending processing acknowledgment to user")
         send_processing_message(channel_id, text)
 
-        # Use the generator to get live updates from processing
         for update in process_slack_message(text):
             # Each update is a dict with keys 'stage' and 'message'
             web_client.chat_postMessage(channel=channel_id, text=update["message"])

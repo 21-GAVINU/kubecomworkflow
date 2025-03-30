@@ -6,10 +6,8 @@ from dotenv import load_dotenv
 from pathlib import Path
 import os
 
-# Load environment variables from .env in the project root
 env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
 
-# Retrieve variables
 SIGNING_SECRET = os.environ.get("signToken")
 SLACK_BOT_TOKEN = os.environ.get("slackToken")

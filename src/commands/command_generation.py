@@ -1,12 +1,11 @@
 import logging
 import re
 import torch
-from src.config.config import MAX_NEW_TOKENS  # Adjust as needed
+from src.config.config import MAX_NEW_TOKENS 
 
 def generate_cot(instruction: str, model, tokenizer) -> str:
     """
-    Generates a chain-of-thought (CoT) from the model in a series of steps.
-    The model is asked to list each step in a concise manner.
+    Generate the chain-of-thought (CoT) from the model in a series of steps.
     """
     logging.info(f"Generating Chain-of-Thought for instruction: {instruction}")
     
@@ -49,13 +48,11 @@ def generate_cot(instruction: str, model, tokenizer) -> str:
     raw_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
     logging.info(f"Raw CoT output: {raw_output}")
 
-    # Just return the text as-is, since we are not enforcing JSON.
     return raw_output.strip()
 
-def generate_commands_from_cot(cot: str, model, tokenizer) -> list:
+def generate_commands(cot: str, model, tokenizer) -> list:
     """
     Generates kubectl commands based on the provided Chain-of-Thought (CoT).
-    The system message instructs the model to output only the commands, one per line, each starting with "kubectl".
     """
     logging.info("Generating kubectl commands from CoT.")
     messages = [
@@ -96,7 +93,6 @@ def generate_commands_from_cot(cot: str, model, tokenizer) -> list:
     full_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
     logging.info(f"Raw commands output: {full_output}")
 
-    # Extract lines that start with "kubectl"
     commands = [
         line.strip()
         for line in full_output.split("\n")
@@ -105,11 +101,9 @@ def generate_commands_from_cot(cot: str, model, tokenizer) -> list:
     logging.info(f"Extracted Commands: {commands}")
     return commands
 
-def refine_commands_with_error(intent: str, previous_commands: list, error_message: str, model, tokenizer) -> list:
+def refine_commands(intent: str, previous_commands: list, error_message: str, model, tokenizer) -> list:
     """
-    Re-prompts the model to refine kubectl commands given the original intent,
-    previously attempted commands, and an error message from execution.
-    The output should include only valid kubectl commands, one per line.
+    Re-prompts the model to refine kubectl commands.
     """
     logging.info("Refining commands with error feedback...")
     messages = [
@@ -154,7 +148,6 @@ def refine_commands_with_error(intent: str, previous_commands: list, error_messa
     raw_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
     logging.info(f"Refined commands output: {raw_output}")
     
-    # Extract lines starting with "kubectl"
     refined_commands = [line.strip() for line in raw_output.split("\n") if line.strip().startswith("kubectl")]
     logging.info(f"Refined Commands: {refined_commands}")
     return refined_commands

@@ -4,18 +4,14 @@ from src.model.model_loader import load_model
 from src.commands.command_executor import execute_kubectl_commands
 from src.commands.command_generation import (
     generate_cot, 
-    generate_commands_from_cot, 
-    refine_commands_with_error
+    generate_commands, 
+    refine_commands
 )
 from src.opa.opa_integration import opa_check_command
 
-# Load AI Model once
 model, tokenizer = load_model()
 
 def extract_error_from_output(execution_output: str) -> str:
-    """
-    Extracts error-related lines from the execution output.
-    """
     lines = execution_output.split("\n")
     error_lines = [line for line in lines if "error:" in line.lower()]
     return "\n".join(error_lines) if error_lines else "Unknown error"
@@ -23,15 +19,13 @@ def extract_error_from_output(execution_output: str) -> str:
 def extract_steps_from_cot(cot: str) -> str:
     """
     Extracts only the bullet-pointed or numbered steps from the full chain-of-thought.
-    Also captures lines starting with 'Step X:' but skips lines that are generic placeholders,
-    e.g. 'Step 1: <reasoning>' or any 'Step X: <...>'.
     If no steps are found, returns the entire CoT.
     """
     lines = cot.splitlines()
     bullet_lines = []
     for line in lines:
         stripped = line.strip()
-        # Skip lines that match a generic placeholder like "Step 1: <anything>"
+        # Skip lines that match a generic placeholder"
         if re.match(r"^step\s*\d+:\s*<.*?>\s*$", stripped, re.IGNORECASE):
             continue
         # If line starts with a dash, a digit+period, or "Step X:" treat it as a step
@@ -67,7 +61,7 @@ def process_slack_message(text):
         yield {"stage": "cot", "message": f"💡 *Chain-of-Thought:*\n```{steps_only}```"}
 
         # Stage 2: Generate commands based on the CoT
-        commands = generate_commands_from_cot(cot, model, tokenizer)
+        commands = generate_commands(cot, model, tokenizer)
         logging.info(f"Initial Commands extracted: {commands}")
         if not commands:
             yield {"stage": "final", "message": "⚠️ No valid Kubernetes commands found."}
@@ -99,14 +93,12 @@ def process_slack_message(text):
             yield {"stage": "final", "message": msg}
             return
 
-        # Yield the validated commands
         yield {"stage": "commands", "message": f"🔧 *Generated Kubernetes Commands:*\n```{chr(10).join(allowed_commands)}```"}
 
         # Stage 4: Execute the allowed commands
         execution_output = execute_kubectl_commands(allowed_commands, delay=5)
         logging.info(f"Initial execution output: {execution_output}")
 
-        # If execution output does not contain error, yield final result
         if "error:" not in execution_output.lower():
             yield {"stage": "final", "message": f"✅ *Execution Results:*\n```{execution_output}```"}
             return
@@ -114,16 +106,14 @@ def process_slack_message(text):
         # Stage 5: Handle errors and refine commands
         error_message = extract_error_from_output(execution_output)
         logging.info(f"Detected error: {error_message}")
-        # Yield the initial execution output with error
         yield {"stage": "initial_error", "message": f"❌ *Initial Execution Results (with error):*\n```{execution_output}```"}
         
-        refined_commands = refine_commands_with_error(text, commands, error_message, model, tokenizer)
+        refined_commands = refine_commands(text, commands, error_message, model, tokenizer)
         logging.info(f"Refined Commands: {refined_commands}")
         if not refined_commands:
             yield {"stage": "final", "message": "⚠️ Unable to refine commands after error."}
             return
         
-        # Yield the refined commands
         yield {"stage": "refined_commands", "message": f"🔧 *Refined Kubernetes Commands:*\n```{chr(10).join(refined_commands)}```"}
         
         refined_execution_output = execute_kubectl_commands(refined_commands, delay=10)
