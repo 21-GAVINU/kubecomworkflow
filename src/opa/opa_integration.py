@@ -22,7 +22,8 @@ else:
     opa_logger.handlers.clear()
     opa_logger.addHandler(file_handler)
 
-OPA_URL = os.path.join(os.environ.get("opaServerHost"), "/v1/data/k8s/allow")
+OPA_URL = os.environ.get("opaServerHost", "http://localhost:8181") + "/v1/data/k8s/allow"
+# OPA_URL = "http://localhost:8181/v1/data/k8s/allow" 
 
 def opa_check_command(command: str) -> (bool, str):
     payload = {"input": {"command": command}}
