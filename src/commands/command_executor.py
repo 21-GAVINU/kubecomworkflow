@@ -23,11 +23,6 @@ known_resources = {
 }
 
 def parse_resource_names(command: str, output: str) -> None:
-    """
-    If 'command' is something like 'kubectl get svc' or 'kubectl get pods',
-    parse the output to discover real resource names and store them in 'known_resources'.
-    Expects the standard 'NAME' column in the output.
-    """
 
     lower_cmd = command.lower()
     if "kubectl get" in lower_cmd:
@@ -51,10 +46,6 @@ def parse_resource_names(command: str, output: str) -> None:
                     known_resources[resource_type].add(resource_name)
 
 def rewrite_command(command: str) -> str:
-    """
-    If the command references a resource name that isn't in known_resources but
-    we have exactly one known resource of that type, we do a simple substitution.
-    """
     lower_cmd = command.lower()
 
     if "svc" in lower_cmd or "service" in lower_cmd:
@@ -66,13 +57,7 @@ def rewrite_command(command: str) -> str:
     else:
         return command 
 
-    # Extract the name after 'svc' or 'pods' or 'deployment' if it exists
-    # This is a naive approach: look for the first token after 'svc' or 'service'
-    # Then see if it's in known_resources or not
-    # If not, but known_resources has exactly one item, rewrite
-    # If multiple items or none, skip rewriting
-
-    # Attempt a simple regex to find 'svc <name>' or 'service <name>' or 'pods <name>' etc.
+    # Find 'svc <name>' or 'service <name>' or 'pods <name>' etc.
     match = re.search(r'(?:svc|service|pods|deployment)\s+([\w-]+)', command, re.IGNORECASE)
     if match:
         guessed_name = match.group(1)
@@ -96,11 +81,10 @@ def execute_kubectl_commands(commands, delay: int = 10) -> str:
     aggregated_output = []
 
     for i, command in enumerate(commands):
-        # Rewrite the command if it references a placeholder
         command = rewrite_command(command)
 
         print(f"\nExecuting: {command}")
-        # Execute the command
+        # Execute command
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         success = (result.returncode == 0)
 
