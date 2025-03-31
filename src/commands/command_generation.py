@@ -18,7 +18,6 @@ def generate_cot(instruction: str, model, tokenizer) -> str:
                 "Step 1: <reasoning>\n"
                 "Step 2: <reasoning>\n"
                 "Step 3: <reasoning>\n\n"
-                "No extra commentary beyond these steps."
             )
         },
         {
@@ -81,7 +80,7 @@ def generate_commands(cot: str, model, tokenizer) -> list:
         inputs,
         max_new_tokens=150,
         do_sample=True,
-        temperature=0.7,
+        temperature=0.6,
         top_p=0.9,
         num_beams=1,
         early_stopping=True,
@@ -136,7 +135,7 @@ def refine_commands(intent: str, previous_commands: list, error_message: str, mo
         inputs,
         max_new_tokens=150,
         do_sample=True,
-        temperature=0.7,
+        temperature=0.6,
         top_p=0.9,
         num_beams=1,
         early_stopping=True,
