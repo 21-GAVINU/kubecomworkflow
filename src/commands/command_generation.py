@@ -19,7 +19,6 @@ def generate_cot(instruction: str, model, tokenizer) -> str:
                 "Step 1: <reasoning>\n"
                 "Step 2: <reasoning>\n"
                 "Step 3: <reasoning>\n\n"
-                "No extra commentary beyond these steps."
             )
         },
         {
@@ -49,8 +48,7 @@ def generate_cot(instruction: str, model, tokenizer) -> str:
     raw_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
     logging.info(f"Raw CoT output: {raw_output}")
 
-    # Just return the text as-is, since we are not enforcing JSON.
-    return raw_output.strip()
+    return raw_output.strip()                   
 
 def generate_commands_from_cot(cot: str, model, tokenizer) -> list:
     """
