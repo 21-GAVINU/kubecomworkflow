@@ -25,19 +25,13 @@ else:
 OPA_URL = os.path.join(os.environ.get("opaServerHost"), "/v1/data/k8s/allow")
 
 def opa_check_command(command: str) -> (bool, str):
-    """
-    Sends the command to the OPA server for evaluation.
-    
-    :param command: The generated kubectl command.
-    :return: A tuple (allowed, reason) where allowed is True if the command is allowed.
-    """
     payload = {"input": {"command": command}}
     try:
         response = requests.post(OPA_URL, json=payload)
         response.raise_for_status()
         result = response.json().get("result", {})
 
-        # Treat any non-empty deny list as a rejection.
+        # Non-empty deny list = Rejection.
         deny_list = result.get("deny", [])
         allowed = result.get("allow", True) and not deny_list
         reason = "; ".join(deny_list) if deny_list else ""
